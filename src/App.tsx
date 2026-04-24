@@ -35,7 +35,7 @@ import { GoogleGenAI } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
 import { initializeApp } from 'firebase/app';
 import { getFirestore as getClientFirestore, collection, query, orderBy, limit, onSnapshot, doc, getDocFromServer } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json';
+//import firebaseConfig from '../firebase-applet-config.json';
 
 // Initialize Firebase Client
 const config = {
