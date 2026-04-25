@@ -75,69 +75,68 @@ Create the Python script on your Raspberry Pi to handle the photo capture.
    ```
 2. Paste the following code:
    ```python
-import os
-import subprocess
-import datetime
+   import os
+   import subprocess
+   import datetime
 
-def capture_image():
-    """
-    Captures a single photo from the connected webcam using fswebcam.
-    Generates a filename based on the current system time.
-    Saves the image to ~/PlantPhotos/.
-    """
-    # Target directory for photos
-    target_dir = os.path.expanduser("~/PlantPhotos/")
-    
-    # Ensure the directory exists
-    if not os.path.exists(target_dir):
-        try:
-            os.makedirs(target_dir)
-            print(f"Created directory: {target_dir}")
-        except Exception as e:
-            print(f"Failed to create directory {target_dir}: {e}")
-            return None
+   def capture_image():
+       """
+       Captures a single photo from the connected webcam using fswebcam.
+       Generates a filename based on the current system time.
+       Saves the image to ~/PlantPhotos/.
+       """
+       # Target directory for photos
+       target_dir = os.path.expanduser("~/PlantPhotos/")
+       
+       # Ensure the directory exists
+       if not os.path.exists(target_dir):
+           try:
+               os.makedirs(target_dir)
+               print(f"Created directory: {target_dir}")
+           except Exception as e:
+               print(f"Failed to create directory {target_dir}: {e}")
+               return None
 
-    # Generate timestamp in yyyy-mm-dd-hh-mm format
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M")
-    filename = f"{timestamp}.jpg"
-    
-    # Define the full path
-    filepath = os.path.join(target_dir, filename)
+       # Generate timestamp in yyyy-mm-dd-hh-mm format
+       timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M")
+       filename = f"{timestamp}.jpg"
+       
+       # Define the full path
+       filepath = os.path.join(target_dir, filename)
 
-    print(f"Attempting to capture: {filename}")
+       print(f"Attempting to capture: {filename}")
 
-    try:
-        # Tuning parameters for fswebcam:
-        # -r: resolution (800x800)
-        # --no-banner: removes the timestamp text overlay
-        # -S 20: Skips first 20 frames to allow auto-exposure to stabilize
-        # --set brightness=40%: Darkens the image to fix overexposure
-        # --set contrast=60%: Increases contrast for better AI analysis
-        
-        subprocess.run([
-            "fswebcam", 
-            "-r", "800x800", 
-            "--no-banner",
-            "-S", "20",
-            "--set", "brightness=20%",
-            "--set", "contrast=60%",
-            filepath
-        ], check=True)
-        
-        print(f"Success! Photo saved at: {filepath}")
-        return filepath
+       try:
+           # Tuning parameters for fswebcam:
+           # -r: resolution (800x800)
+           # --no-banner: removes the timestamp text overlay
+           # -S 20: Skips first 20 frames to allow auto-exposure to stabilize
+           # --set brightness=20%: Darkens the image to fix overexposure
+           # --set contrast=60%: Increases contrast for better AI analysis
+           
+           subprocess.run([
+               "fswebcam", 
+               "-r", "800x800", 
+               "--no-banner",
+               "-S", "20",
+               "--set", "brightness=20%",
+               "--set", "contrast=60%",
+               filepath
+           ], check=True)
+           
+           print(f"Success! Photo saved at: {filepath}")
+           return filepath
 
-    except subprocess.CalledProcessError as e:
-        print(f"Error: Failed to capture image. Check webcam connection.")
-        print(f"Technical details: {e}")
-        return None
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-        return None
+       except subprocess.CalledProcessError as e:
+           print(f"Error: Failed to capture image. Check webcam connection.")
+           print(f"Technical details: {e}")
+           return None
+       except Exception as e:
+           print(f"An unexpected error occurred: {e}")
+           return None
 
-if __name__ == "__main__":
-    capture_image()
-
+   if __name__ == "__main__":
+       capture_image()
    ```
 
 ---
@@ -159,49 +158,51 @@ Sends the most recent photo directly to your Firestore database.
    ```bash
    nano ~/PlantPhotos/upload.py
    ```
-2. Paste the script below (Replace the placeholders with values from your `firebase-applet-config.json`):
+2. Paste the script below (Replace the placeholders with values from your Firebase Project Settings):
+   ```python
+   import base64
+   import requests
+   import os
+   import time
 
-```python
-import base64
-import requests
-import os
-import time
+   # --- CONFIGURATION (DO NOT SHARE PUBLICLY) ---
+   # Find these in Firebase Console -> Project Settings -> General
+   API_KEY = "<YOUR_WEB_API_KEY>"
+   PROJECT_ID = "<YOUR_PROJECT_ID>" 
+   # DB_ID is usually "(default)" unless you created a named database
+   DB_ID = "(default)"
+   # SECRET must match the UPLOAD_SECRET in your Vercel/AI Studio settings
+   SECRET = "<YOUR_UPLOAD_SECRET>"
+   IMAGE_DIR = os.path.expanduser("~/PlantPhotos")
+   # ---------------------
 
-# --- CONFIGURATION (DO NOT SHARE PUBLICLY) ---
-API_KEY = "<YOUR_WEB_API_KEY>"
-PROJECT_ID = "<YOUR_PROJECT_ID>"
-DB_ID = "<YOUR_FIRESTORE_DB_ID>"
-SECRET = "<YOUR_UPLOAD_SECRET>"
-IMAGE_DIR = os.path.expanduser("~/PlantPhotos")
-# ---------------------
+   def get_latest_image():
+       files = [os.path.join(IMAGE_DIR, f) for f in os.listdir(IMAGE_DIR) if f.endswith('.jpg')]
+       return max(files, key=os.path.getctime) if files else None
 
-def get_latest_image():
-    files = [os.path.join(IMAGE_DIR, f) for f in os.listdir(IMAGE_DIR) if f.endswith('.jpg')]
-    return max(files, key=os.path.getctime) if files else None
+   latest = get_latest_image()
+   if not latest:
+       print("No photos found.")
+       exit()
 
-latest = get_latest_image()
-if not latest:
-    print("No photos found.")
-    exit()
+   with open(latest, "rb") as img_file:
+       b64_string = base64.b64encode(img_file.read()).decode('utf-8')
 
-with open(latest, "rb") as img_file:
-    b64_string = base64.b64encode(img_file.read()).decode('utf-8')
+   url = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/{DB_ID}/documents/snapshots?key={API_KEY}"
+   payload = {
+       "fields": {
+           "image": {"stringValue": b64_string},
+           "timestamp": {"integerValue": str(int(time.time() * 1000))},
+           "secret": {"stringValue": SECRET}
+       }
+   }
 
-url = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/{DB_ID}/documents/snapshots?key={API_KEY}"
-payload = {
-    "fields": {
-        "image": {"stringValue": b64_string},
-        "timestamp": {"integerValue": str(int(time.time() * 1000))},
-        "secret": {"stringValue": SECRET}
-    }
-}
-
-response = requests.post(url, json=payload)
-if response.status_code == 200:
-    print(f"✅ Uploaded: {os.path.basename(latest)}")
-else:
-    print(f"❌ Error {response.status_code}: {response.text}")
-```
+   response = requests.post(url, json=payload)
+   if response.status_code == 200:
+       print(f"✅ Uploaded: {os.path.basename(latest)}")
+   else:
+       print(f"❌ Error {response.status_code}: {response.text}")
+   ```
 
 3. Add to Crontab:
 ```bash
