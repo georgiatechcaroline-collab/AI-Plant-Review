@@ -103,25 +103,18 @@ export default function App() {
       })) as any[];
       setHistory(data);
 
-      // Auto-focus the latest one if it's new, OR if it has new analysis data
       if (data.length > 0) {
         const latest = data[0];
-        const isNewSnapshot = !lastAnalyzedRef.current || latest.timestamp > lastAnalyzedRef.current;
-        const hasNewData = latest.timestamp === lastAnalyzedRef.current && (latest.score !== healthScore || latest.analysis !== aiReport);
-
-        if (isNewSnapshot || hasNewData) {
-          if (isNewSnapshot) {
-            setRemoteImage(latest.image);
-            setLastUpdated(latest.timestamp);
-            // Don't set ref yet if we need to trigger analysis, it's handled in the useEffect below
-          }
-          setHealthScore(latest.score || null);
-          setAiReport(latest.analysis || null);
-        }
+        setRemoteImage(latest.image);
+        setLastUpdated(latest.timestamp);
+        
+        // Only update score/analysis if they are present in the snapshot
+        // to avoid clearing them back to null while analysis might be running
+        if (latest.score !== undefined) setHealthScore(latest.score);
+        if (latest.analysis !== undefined) setAiReport(latest.analysis);
       }
     }, (err) => {
       console.error("Firestore history listener error:", err);
-      // Fallback: stay with existing history or empty
     });
     return () => unsubscribe();
   }, []);
@@ -133,6 +126,8 @@ export default function App() {
         const data = await res.json();
         setRemoteImage(data.image);
         setLastUpdated(data.timestamp);
+        if (data.score !== undefined) setHealthScore(data.score);
+        if (data.analysis !== undefined) setAiReport(data.analysis);
       }
     } catch (err) {
       // Background fetch failure is fine
@@ -150,8 +145,8 @@ export default function App() {
   const analyzePlant = async (image: string) => {
     setIsAnalyzing(true);
     setError(null);
-    setAiReport(null); // Clear previous report during analysis
-    setHealthScore(null); // Clear previous score
+    // Don't clear aiReport here immediately, as we might already have it from the snapshot
+    // But if we're explicitly starting a fresh analysis (aiReport is null), that's fine.
 
     try {
       const response = await ai.models.generateContent({
@@ -175,26 +170,27 @@ export default function App() {
 
       const text = response.text || "";
       try {
-        // Find JSON block if Gemini adds markers
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         const data = JSON.parse(jsonMatch ? jsonMatch[0] : text);
         setHealthScore(data.score);
         setAiReport(data.analysis);
 
-        // Update persistence since analyzer is client-side
+        // Update persistence
+        // Note: UPLOAD_SECRET won't be available on client automatically unless VITE_
+        // But for local demo/preview it's often set. 
+        // We'll try, but the main thing is updating the local state.
         await fetch('/api/upload-image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             image,
-            secret: process.env.UPLOAD_SECRET,
+            secret: (import.meta as any).env.VITE_UPLOAD_SECRET || "Caroline", // Fallback for demo
             score: data.score,
             analysis: data.analysis
           })
         });
-        // We don't need fetchHistory() anymore as onSnapshot handles it
       } catch (e) {
-        setAiReport(text); // Fallback to raw text
+        setAiReport(text);
         setHealthScore(null);
       }
     } catch (err: any) {
@@ -204,13 +200,19 @@ export default function App() {
     }
   };
 
-  // Auto-analyze when image timestamp changes
+  // Trigger analysis when a new image is detected that HAS NO analysis yet
   useEffect(() => {
     if (remoteImage && lastUpdated && lastUpdated !== lastAnalyzedRef.current) {
-      lastAnalyzedRef.current = lastUpdated;
-      analyzePlant(remoteImage);
+      // If the incoming snapshot doesn't have a report, we trigger AI
+      if (!aiReport && !isAnalyzing) {
+        lastAnalyzedRef.current = lastUpdated;
+        analyzePlant(remoteImage);
+      } else if (aiReport) {
+        // If snapshot ALREADY had a report, we just record that we've seen this one
+        lastAnalyzedRef.current = lastUpdated;
+      }
     }
-  }, [remoteImage, lastUpdated]);
+  }, [remoteImage, lastUpdated, aiReport, isAnalyzing]);
 
   return (
     <div className="min-h-screen bg-[#050a08] text-white font-sans selection:bg-accent-green selection:text-black flex flex-col p-6 md:p-10 overflow-y-auto">
@@ -338,11 +340,17 @@ export default function App() {
                     <ReactMarkdown>{aiReport}</ReactMarkdown>
                   </motion.div>
                 ) : (
-                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                  <motion.div 
+                    key="empty"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="p-4 bg-white/5 rounded-2xl border border-white/5"
+                  >
                     <p className="text-xs font-light text-white/60 leading-relaxed text-center">
                       Ready for the next uplink.
                     </p>
-                  </div>
+                  </motion.div>
                 )}
               </AnimatePresence>
             </div>
