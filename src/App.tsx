@@ -103,12 +103,18 @@ export default function App() {
       })) as any[];
       setHistory(data);
 
-      // Auto-focus the latest one if it's new
+      // Auto-focus the latest one if it's new, OR if it has new analysis data
       if (data.length > 0) {
         const latest = data[0];
-        if (!lastAnalyzedRef.current || latest.timestamp > lastAnalyzedRef.current) {
-          setRemoteImage(latest.image);
-          setLastUpdated(latest.timestamp);
+        const isNewSnapshot = !lastAnalyzedRef.current || latest.timestamp > lastAnalyzedRef.current;
+        const hasNewData = latest.timestamp === lastAnalyzedRef.current && (latest.score !== healthScore || latest.analysis !== aiReport);
+
+        if (isNewSnapshot || hasNewData) {
+          if (isNewSnapshot) {
+            setRemoteImage(latest.image);
+            setLastUpdated(latest.timestamp);
+            // Don't set ref yet if we need to trigger analysis, it's handled in the useEffect below
+          }
           setHealthScore(latest.score || null);
           setAiReport(latest.analysis || null);
         }
@@ -144,6 +150,8 @@ export default function App() {
   const analyzePlant = async (image: string) => {
     setIsAnalyzing(true);
     setError(null);
+    setAiReport(null); // Clear previous report during analysis
+    setHealthScore(null); // Clear previous score
 
     try {
       const response = await ai.models.generateContent({
@@ -371,9 +379,6 @@ export default function App() {
                   alt={`History ${idx}`}
                 />
                 <div className="absolute inset-0 bg-black/40 group-hover:bg-transparent transition-colors" />
-                <div className="absolute top-2 right-2 px-2 py-1 bg-black/80 backdrop-blur-md rounded-lg text-[9px] font-mono text-accent-green border border-white/10">
-                  {item.score || '--'}/100
-                </div>
               </div>
               <p className="text-[10px] font-mono text-white/40 group-hover:text-accent-green transition-colors">
                 {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

@@ -13,7 +13,9 @@ Follow these steps to set up your own plant monitoring station.
 ### 2. Set Up Firebase
 1. Go to the [Firebase Console](https://console.firebase.google.com/) and create a new project.
 2. **Firestore Database**: Create a database in "Production Mode" and choose a location.
-3. **Security Rules**: Copy the content of `firestore.rules` from this repo and paste it into the "Rules" tab of your Firestore database in the Firebase console.
+3. **Security Rules**: 
+   - Copy the content of `firestore.rules` from this repo and paste it into the "Rules" tab of your Firestore database in the Firebase console.
+   - **CRITICAL**: In the rules you just pasted, find the line `allow create: if request.resource.data.secret == "<YOUR_UPLOAD_SECRET>"` and replace `"<YOUR_UPLOAD_SECRET>"` with your actual secret password. This MUST match the `UPLOAD_SECRET` you use later.
 4. **Project Settings**:
    - Go to Project Settings (gear icon).
    - Under "General", scroll down to "Your apps" and click the `</>` icon to add a Web App.
@@ -199,9 +201,9 @@ Sends the most recent photo directly to your Firestore database.
 
    response = requests.post(url, json=payload)
    if response.status_code == 200:
-       print(f"✅ Uploaded: {os.path.basename(latest)}")
+       print(f" Uploaded: {os.path.basename(latest)}")
    else:
-       print(f"❌ Error {response.status_code}: {response.text}")
+       print(f" Error {response.status_code}: {response.text}")
    ```
 
 3. Add to Crontab:
@@ -222,7 +224,7 @@ Automatically deletes photos older than 2 days.
 
 If you enjoyed this repo, check out my book, **A Woman’s Guide to Winning in Tech.** This book blends sharp humor with practical career strategies to help women navigate tech on their own terms—without changing who they are. Available on Amazon, Bookshop.org, Barnes & Noble, and IngramSpark.
 
-- 🌐 [Book Website](https://winningintech.com/) 
-- 📘 [Amazon](https://amzn.to/3YxHVO7)
+- [Book Website](https://winningintech.com/) 
+- [Amazon](https://amzn.to/3YxHVO7)
 - [Instagram](https://www.instagram.com/winning.tech)
 - [Facebook](https://www.facebook.com/winningintech)

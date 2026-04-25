@@ -9,7 +9,9 @@ service cloud.firestore {
     // Snapshots: Public read, write restricted to secret-holders (Raspberry Pi)
     match /snapshots/{snapshotId} {
       allow read: if true;
-      allow create: if request.resource.data.secret == "Caroline" 
+      // IMPORTANT: Replace "<YOUR_UPLOAD_SECRET>" with the same secret password 
+      // you set in your Vercel/AI Studio environment variables (UPLOAD_SECRET).
+      allow create: if request.resource.data.secret == "<YOUR_UPLOAD_SECRET>" 
                    && request.resource.data.image is string
                    && request.resource.data.image.size() > 0;
       allow update, delete: if false;
