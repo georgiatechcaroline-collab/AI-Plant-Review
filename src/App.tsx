@@ -35,9 +35,11 @@ import { GoogleGenAI } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
 import { initializeApp } from 'firebase/app';
 import { getFirestore as getClientFirestore, collection, query, orderBy, limit, onSnapshot, doc, getDocFromServer } from 'firebase/firestore';
-//import firebaseConfig from '../firebase-applet-config.json';
 
 // Initialize Firebase Client
+const configs = (import.meta as any).glob('../firebase-applet-config.json', { eager: true, import: 'default' });
+const firebaseConfig = configs['../firebase-applet-config.json'] || {};
+
 const config = {
   apiKey: (import.meta as any).env.VITE_FIREBASE_API_KEY || firebaseConfig.apiKey,
   authDomain: (import.meta as any).env.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfig.authDomain,
@@ -48,7 +50,7 @@ const config = {
 };
 
 const app = initializeApp(config);
-const databaseId = (import.meta as any).env.VITE_FIREBASE_DATABASE_ID || firebaseConfig.firestoreDatabaseId;
+const databaseId = (import.meta as any).env.VITE_FIREBASE_DATABASE_ID || firebaseConfig.firestoreDatabaseId || '(default)';
 const clientDb = getClientFirestore(app, databaseId);
 
 // Initialize Gemini
