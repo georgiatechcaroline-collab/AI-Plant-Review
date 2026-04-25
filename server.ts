@@ -2,12 +2,23 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
-import firebaseConfig from './firebase-applet-config.json' with { type: 'json' };
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Load Firebase config safely
+let firebaseConfig: any = {};
+const configPath = path.join(__dirname, 'firebase-applet-config.json');
+if (fs.existsSync(configPath)) {
+  try {
+    firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+  } catch (e) {
+    console.warn('Could not parse firebase-applet-config.json');
+  }
+}
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
@@ -16,8 +27,8 @@ if (!admin.apps.length) {
   });
 }
 
-// Connect to the specific database instance provided in the config
-const db = getFirestore(process.env.FIREBASE_DATABASE_ID || firebaseConfig.firestoreDatabaseId);
+// Connect to the specific database instance
+const db = getFirestore(process.env.FIREBASE_DATABASE_ID || firebaseConfig.firestoreDatabaseId || '(default)');
 const snapshotsCol = db.collection('snapshots');
 
 async function startServer() {
