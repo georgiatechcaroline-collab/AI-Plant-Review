@@ -60,7 +60,7 @@ sudo apt-get install curl coreutils fswebcam python3
 ### 2. Directory Structure
 Ensure the storage directory exists where photos will be saved:
 ```bash
-mkdir -p /home/admin/PlantPhotos
+mkdir -p ~/PlantPhotos
 ```
 
 ---
@@ -71,33 +71,73 @@ Create the Python script on your Raspberry Pi to handle the photo capture.
 
 1. Create the file:
    ```bash
-   nano /home/admin/PlantPhotos/takephoto.py
+   nano ~/PlantPhotos/takephoto.py
    ```
 2. Paste the following code:
    ```python
-   import os
-   import time
-   from datetime import datetime
+import os
+import subprocess
+import datetime
 
-   # Configuration
-   SAVE_PATH = "/home/admin/PlantPhotos"
-   
-   # Ensure directory exists
-   if not os.path.exists(SAVE_PATH):
-       os.makedirs(SAVE_PATH)
+def capture_image():
+    """
+    Captures a single photo from the connected webcam using fswebcam.
+    Generates a filename based on the current system time.
+    Saves the image to ~/PlantPhotos/.
+    """
+    # Target directory for photos
+    target_dir = os.path.expanduser("~/PlantPhotos/")
+    
+    # Ensure the directory exists
+    if not os.path.exists(target_dir):
+        try:
+            os.makedirs(target_dir)
+            print(f"Created directory: {target_dir}")
+        except Exception as e:
+            print(f"Failed to create directory {target_dir}: {e}")
+            return None
 
-   # Generate filename with timestamp
-   timestamp = datetime.now().strftime("%Y-%m-%d_%H%M")
-   filename = f"{SAVE_PATH}/plant_{timestamp}.jpg"
+    # Generate timestamp in yyyy-mm-dd-hh-mm format
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M")
+    filename = f"{timestamp}.jpg"
+    
+    # Define the full path
+    filepath = os.path.join(target_dir, filename)
 
-   # Execute capture command
-   # Option A: For official Raspberry Pi Camera Module
-   # os.system(f"libcamera-still -o {filename} --nopreview --width 1280 --height 720")
-   
-   # Option B: For USB Webcams (using fswebcam)
-   os.system(f"fswebcam -r 1280x720 --no-banner {filename}")
+    print(f"Attempting to capture: {filename}")
 
-   print(f"Captured: {filename}")
+    try:
+        # Tuning parameters for fswebcam:
+        # -r: resolution (800x800)
+        # --no-banner: removes the timestamp text overlay
+        # -S 20: Skips first 20 frames to allow auto-exposure to stabilize
+        # --set brightness=40%: Darkens the image to fix overexposure
+        # --set contrast=60%: Increases contrast for better AI analysis
+        
+        subprocess.run([
+            "fswebcam", 
+            "-r", "800x800", 
+            "--no-banner",
+            "-S", "20",
+            "--set", "brightness=20%",
+            "--set", "contrast=60%",
+            filepath
+        ], check=True)
+        
+        print(f"Success! Photo saved at: {filepath}")
+        return filepath
+
+    except subprocess.CalledProcessError as e:
+        print(f"Error: Failed to capture image. Check webcam connection.")
+        print(f"Technical details: {e}")
+        return None
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+        return None
+
+if __name__ == "__main__":
+    capture_image()
+
    ```
 
 ---
@@ -109,7 +149,7 @@ To install these tasks, run `crontab -e` on your Raspberry Pi and paste the foll
 ### 1. Automated Photo Capture
 Takes a photo every 30 minutes from 7 am to 7 pm daily.
 ```bash
-*/30 7-18 * * * /usr/bin/python3 /home/admin/PlantPhotos/takephoto.py
+*/30 7-18 * * * /usr/bin/python3 ~/PlantPhotos/takephoto.py
 ```
 
 ### 2. Automatic AI Upload (Firebase Direct)
@@ -117,7 +157,7 @@ Sends the most recent photo directly to your Firestore database.
 
 1. Create `upload.py`:
    ```bash
-   nano /home/admin/PlantPhotos/upload.py
+   nano ~/PlantPhotos/upload.py
    ```
 2. Paste the script below (Replace the placeholders with values from your `firebase-applet-config.json`):
 
@@ -132,7 +172,7 @@ API_KEY = "<YOUR_WEB_API_KEY>"
 PROJECT_ID = "<YOUR_PROJECT_ID>"
 DB_ID = "<YOUR_FIRESTORE_DB_ID>"
 SECRET = "<YOUR_UPLOAD_SECRET>"
-IMAGE_DIR = "/home/admin/PlantPhotos"
+IMAGE_DIR = os.path.expanduser("~/PlantPhotos")
 # ---------------------
 
 def get_latest_image():
@@ -166,13 +206,13 @@ else:
 3. Add to Crontab:
 ```bash
 # From 7 am to 7 pm daily, upload every 2 hours at 7:02 am, 9:02 am, etc until 19:02. This allows for the most recent photo to be uploaded 2 minutes after it is taken.
-2 7,9,11,13,15,17,19 * * * /usr/bin/python3 /home/admin/PlantPhotos/upload.py
+2 7,9,11,13,15,17,19 * * * /usr/bin/python3 ~/PlantPhotos/upload.py
 ```
 
 ### 3. Storage Maintenance (Cleanup)
 Automatically deletes photos older than 2 days.
 ```bash
-0 0 * * * find /home/admin/PlantPhotos/ -name "*.jpg" -type f -mtime +2 -delete
+0 0 * * * find ~/PlantPhotos/ -name "*.jpg" -type f -mtime +2 -delete
 ```
 
 ---
